@@ -214,6 +214,18 @@
         </select>
       </div>
 
+      <div class="control-group">
+        <label for="bitrateInput">Recording bitrate (kbps)</label>
+        <input
+          type="number"
+          id="bitrateInput"
+          min="500"
+          max="100000"
+          step="500"
+          value="20000"
+        />
+      </div>
+
       <!-- Detection -->
       <div class="control-group">
         <label for="redThreshold">Red detection threshold</label>
@@ -311,6 +323,7 @@
     const durationInput = document.getElementById("durationInput");
     const fpsInput = document.getElementById("fpsInput");
     const codecSelect = document.getElementById("codecSelect");
+    const bitrateInput = document.getElementById("bitrateInput");
     const flowModeSelect = document.getElementById("flowModeSelect");
     const redThresholdInput = document.getElementById("redThreshold");
     const windInput = document.getElementById("windInput");
@@ -854,6 +867,11 @@
 
       const duration = parseFloat(durationInput.value) || 5;
       targetFPS = parseInt(fpsInput.value, 10) || 30;
+      const requestedBitrateKbps = parseInt(bitrateInput.value, 10);
+      const videoBitsPerSecond =
+        Number.isFinite(requestedBitrateKbps) && requestedBitrateKbps > 0
+          ? requestedBitrateKbps * 1000
+          : undefined;
 
       applyResolution();
       buildStarMask();
@@ -864,6 +882,9 @@
       const codecChoice = codecSelect.value;
       const mimeType = getSupportedMime(codecChoice);
       const options = mimeType ? { mimeType } : {};
+      if (videoBitsPerSecond) {
+        options.videoBitsPerSecond = videoBitsPerSecond;
+      }
 
       try {
         recorder = new MediaRecorder(stream, options);
@@ -899,8 +920,12 @@
       recordEndTime = performance.now() + duration * 1000;
       recording = true;
       recorder.start();
+      const bitrateLabel = videoBitsPerSecond
+        ? `${(videoBitsPerSecond / 1000).toLocaleString()} kbps`
+        : "browser default bitrate";
+
       setStatus(
-        `Recording for ${duration.toFixed(1)}s at ~${targetFPS}fps using ${mimeType || "default codec"}...`
+        `Recording for ${duration.toFixed(1)}s at ~${targetFPS}fps using ${mimeType || "default codec"} at ${bitrateLabel}...`
       );
     }
 
