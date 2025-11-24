@@ -165,6 +165,7 @@
           <option value="leftToRightWind">Left-to-right with wind</option>
           <option value="radial">Radiate from center</option>
           <option value="spiral">Spiral drift</option>
+          <option value="cone">Cone sweep</option>
         </select>
       </div>
 
@@ -176,6 +177,31 @@
           <label for="spiralCenterY">Y</label>
           <input type="number" id="spiralCenterY" min="0" value="1080" />
         </div>
+      </div>
+
+      <div class="control-group">
+        <label>Cone origin (px)</label>
+        <div class="inline-inputs">
+          <label for="coneOriginX">X</label>
+          <input type="number" id="coneOriginX" min="0" value="200" />
+          <label for="coneOriginY">Y</label>
+          <input type="number" id="coneOriginY" min="0" value="1080" />
+        </div>
+      </div>
+
+      <div class="control-group">
+        <label for="coneDirection">Cone direction (deg)</label>
+        <input type="number" id="coneDirection" min="-360" max="360" value="0" />
+      </div>
+
+      <div class="control-group">
+        <label for="coneSpread">Cone spread (deg)</label>
+        <input type="number" id="coneSpread" min="1" max="360" value="160" />
+      </div>
+
+      <div class="control-group">
+        <label for="coneCenterBias">Cone center bias</label>
+        <input type="range" id="coneCenterBias" min="0" max="1" step="0.05" value="0.6" />
       </div>
 
       <div class="control-group">
@@ -290,6 +316,11 @@
     const windInput = document.getElementById("windInput");
     const spiralCenterXInput = document.getElementById("spiralCenterX");
     const spiralCenterYInput = document.getElementById("spiralCenterY");
+    const coneOriginXInput = document.getElementById("coneOriginX");
+    const coneOriginYInput = document.getElementById("coneOriginY");
+    const coneDirectionInput = document.getElementById("coneDirection");
+    const coneSpreadInput = document.getElementById("coneSpread");
+    const coneCenterBiasInput = document.getElementById("coneCenterBias");
 
     // NEW: particle control inputs
     const particlesInput = document.getElementById("particlesInput");
@@ -344,6 +375,13 @@
     let flowMode = "classic";
     let spiralCenterX = canvas.width / 2;
     let spiralCenterY = canvas.height / 2;
+    let coneOriginX = 200;
+    let coneOriginY = 1080;
+    let coneDirectionDeg = 0;
+    let coneSpreadDeg = 160;
+    let coneCenterBias = 0.6;
+
+    const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
     const crop = {
       enabled: false,
@@ -519,6 +557,7 @@
 
       flowMode = flowModeSelect.value || "classic";
       readSpiralCenter();
+      readConeSettings();
     }
 
     function readSpiralCenter() {
@@ -534,6 +573,24 @@
 
       spiralCenterXInput.value = Math.round(spiralCenterX);
       spiralCenterYInput.value = Math.round(spiralCenterY);
+    }
+
+    function readConeSettings() {
+      const fallbackW = parseFloat(widthInput.value) || canvas.width || 3840;
+      const fallbackH = parseFloat(heightInput.value) || canvas.height || 2160;
+      coneOriginX = clamp(parseFloat(coneOriginXInput.value) || 0, 0, fallbackW);
+      coneOriginY = clamp(parseFloat(coneOriginYInput.value) || 0, 0, fallbackH);
+      coneDirectionDeg = parseFloat(coneDirectionInput.value) || 0;
+      coneSpreadDeg = clamp(parseFloat(coneSpreadInput.value) || 0, 0, 360);
+      coneCenterBias = clamp(parseFloat(coneCenterBiasInput.value) || 0, 0, 1);
+    }
+
+    function sampleConeAngle(baseAngle, spreadRad, centerBiasAmount) {
+      const halfSpread = Math.max(0, spreadRad / 2);
+      const exponent = 1 + centerBiasAmount * 4;
+      const magnitude = Math.pow(Math.random(), exponent) * halfSpread;
+      const direction = Math.random() < 0.5 ? -1 : 1;
+      return baseAngle + direction * magnitude;
     }
 
     function syncCropInputsFromImage() {
@@ -590,10 +647,12 @@
       reset() {
         readParticleSettings(); // ensure we use latest settings
 
+        const useConeOrigin = flowMode === "cone";
+
         if (!starMask.length) {
           // Fallback: random red particles across canvas
-          this.x = Math.random() * canvas.width;
-          this.y = Math.random() * canvas.height;
+          this.x = useConeOrigin ? coneOriginX : Math.random() * canvas.width;
+          this.y = useConeOrigin ? coneOriginY : Math.random() * canvas.height;
           this.color = "rgba(255,0,0,1)";
           this.life = lifeMin + Math.random() * (lifeMax - lifeMin);
           this.age = Math.random() * this.life;
@@ -603,8 +662,8 @@
         }
 
         const p = starMask[Math.floor(Math.random() * starMask.length)];
-        this.x = p.x + (Math.random() - 0.5) * 1.5;
-        this.y = p.y + (Math.random() - 0.5) * 1.5;
+        this.x = useConeOrigin ? coneOriginX + (Math.random() - 0.5) * 3 : p.x + (Math.random() - 0.5) * 1.5;
+        this.y = useConeOrigin ? coneOriginY + (Math.random() - 0.5) * 3 : p.y + (Math.random() - 0.5) * 1.5;
         this.color = `rgba(${p.r},${p.g},${p.b},1)`;
         this.life = lifeMin + Math.random() * (lifeMax - lifeMin);
         this.age = Math.random() * this.life * 0.3;
@@ -691,6 +750,17 @@
           this.vx = Math.cos(spiralAngle + Math.PI / 2) * orbit;
           this.vy = Math.sin(spiralAngle + Math.PI / 2) * orbit;
           this.phase = "spiral";
+          return;
+        }
+
+        if (flowMode === "cone") {
+          const baseAngle = (coneDirectionDeg * Math.PI) / 180;
+          const spreadRad = (coneSpreadDeg * Math.PI) / 180;
+          const angle = sampleConeAngle(baseAngle, spreadRad, coneCenterBias);
+          const speed = base * speedMultiplier * (0.55 + Math.random() * 0.9);
+          this.vx = Math.cos(angle) * speed;
+          this.vy = Math.sin(angle) * speed;
+          this.phase = "cone";
           return;
         }
 
@@ -900,15 +970,27 @@
       refreshAfterResolutionChange();
     });
 
-    // NEW: react to particle tuning changes
-    [particlesInput, sizeInput, speedInput, windInput, lifeMinInput, lifeMaxInput].forEach(el => {
-      el.addEventListener("input", () => {
-        if (!sourceImage) return;
-        readParticleSettings();
-        createParticles();
-        setStatus("Particle parameters updated.");
+      // NEW: react to particle tuning changes
+      [
+        particlesInput,
+        sizeInput,
+        speedInput,
+        windInput,
+        lifeMinInput,
+        lifeMaxInput,
+        coneOriginXInput,
+        coneOriginYInput,
+        coneDirectionInput,
+        coneSpreadInput,
+        coneCenterBiasInput
+      ].forEach(el => {
+        el.addEventListener("input", () => {
+          if (!sourceImage) return;
+          readParticleSettings();
+          createParticles();
+          setStatus("Particle parameters updated.");
+        });
       });
-    });
 
     [spiralCenterXInput, spiralCenterYInput].forEach(el => {
       el.addEventListener("input", () => {
