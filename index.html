@@ -109,13 +109,24 @@
       </div>
 
       <div class="control-group">
+        <label for="resolutionSelect">Resolution preset</label>
+        <select id="resolutionSelect">
+          <option value="3840x2160">4K UHD (3840 x 2160)</option>
+          <option value="2560x1440">1440p (2560 x 1440)</option>
+          <option value="1920x1080">1080p (1920 x 1080)</option>
+          <option value="1280x720">720p (1280 x 720)</option>
+          <option value="custom">Custom</option>
+        </select>
+      </div>
+
+      <div class="control-group">
         <label>Canvas width (px)</label>
-        <input type="number" id="widthInput" min="128" value="1920" />
+        <input type="number" id="widthInput" min="128" value="3840" />
       </div>
 
       <div class="control-group">
         <label>Canvas height (px)</label>
-        <input type="number" id="heightInput" min="128" value="1080" />
+        <input type="number" id="heightInput" min="128" value="2160" />
       </div>
 
       <div class="control-group">
@@ -203,6 +214,7 @@
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
     const imageLoader = document.getElementById("imageLoader");
+    const resolutionSelect = document.getElementById("resolutionSelect");
     const widthInput = document.getElementById("widthInput");
     const heightInput = document.getElementById("heightInput");
     const durationInput = document.getElementById("durationInput");
@@ -267,12 +279,45 @@
     }
 
     function applyResolution() {
-      const w = parseInt(widthInput.value, 10) || 1920;
-      const h = parseInt(heightInput.value, 10) || 1080;
+      const w = parseInt(widthInput.value, 10) || 3840;
+      const h = parseInt(heightInput.value, 10) || 2160;
       canvas.width = w;
       canvas.height = h;
       maskCanvas.width = w;
       maskCanvas.height = h;
+    }
+
+    function refreshAfterResolutionChange() {
+      applyResolution();
+      if (sourceImage) {
+        buildStarMask();
+        createParticles();
+        startAnimation();
+      }
+    }
+
+    const resolutionPresets = {
+      "3840x2160": { w: 3840, h: 2160 },
+      "2560x1440": { w: 2560, h: 1440 },
+      "1920x1080": { w: 1920, h: 1080 },
+      "1280x720": { w: 1280, h: 720 }
+    };
+
+    function setResolutionPreset(key) {
+      const preset = resolutionPresets[key];
+      if (!preset) return;
+      widthInput.value = preset.w;
+      heightInput.value = preset.h;
+      applyResolution();
+    }
+
+    function syncPresetSelection() {
+      const currentW = parseInt(widthInput.value, 10);
+      const currentH = parseInt(heightInput.value, 10);
+      const match = Object.entries(resolutionPresets).find(([, size]) => {
+        return size.w === currentW && size.h === currentH;
+      });
+      resolutionSelect.value = match ? `${currentW}x${currentH}` : "custom";
     }
 
     function drawImageFit(ctx, img, targetW, targetH) {
@@ -651,22 +696,23 @@
     });
 
     // When resolution changes, rebuild everything
-    widthInput.addEventListener("change", () => {
-      applyResolution();
-      if (sourceImage) {
-        buildStarMask();
-        createParticles();
-        startAnimation();
+    resolutionSelect.addEventListener("change", () => {
+      const value = resolutionSelect.value;
+      if (value !== "custom") {
+        setResolutionPreset(value);
       }
+      refreshAfterResolutionChange();
+      syncPresetSelection();
+    });
+
+    widthInput.addEventListener("change", () => {
+      syncPresetSelection();
+      refreshAfterResolutionChange();
     });
 
     heightInput.addEventListener("change", () => {
-      applyResolution();
-      if (sourceImage) {
-        buildStarMask();
-        createParticles();
-        startAnimation();
-      }
+      syncPresetSelection();
+      refreshAfterResolutionChange();
     });
 
     // NEW: react to particle tuning changes
@@ -708,6 +754,7 @@
 
     // Initialize canvas size
     applyResolution();
+    syncPresetSelection();
   </script>
 </body>
 </html>
