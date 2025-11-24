@@ -100,6 +100,7 @@
     }
     #detectionStatus.error {
       color: #ff6b6b;
+    }
     .inline-inputs {
       display: flex;
       gap: 8px;
@@ -165,6 +166,16 @@
           <option value="radial">Radiate from center</option>
           <option value="spiral">Spiral drift</option>
         </select>
+      </div>
+
+      <div class="control-group">
+        <label>Spiral center (px)</label>
+        <div class="inline-inputs">
+          <label for="spiralCenterX">X</label>
+          <input type="number" id="spiralCenterX" min="0" value="1920" />
+          <label for="spiralCenterY">Y</label>
+          <input type="number" id="spiralCenterY" min="0" value="1080" />
+        </div>
       </div>
 
       <div class="control-group">
@@ -277,6 +288,8 @@
     const flowModeSelect = document.getElementById("flowModeSelect");
     const redThresholdInput = document.getElementById("redThreshold");
     const windInput = document.getElementById("windInput");
+    const spiralCenterXInput = document.getElementById("spiralCenterX");
+    const spiralCenterYInput = document.getElementById("spiralCenterY");
 
     // NEW: particle control inputs
     const particlesInput = document.getElementById("particlesInput");
@@ -329,6 +342,8 @@
     let lifeMin = 0.4;
     let lifeMax = 1.2;
     let flowMode = "classic";
+    let spiralCenterX = canvas.width / 2;
+    let spiralCenterY = canvas.height / 2;
 
     const crop = {
       enabled: false,
@@ -503,6 +518,22 @@
       }
 
       flowMode = flowModeSelect.value || "classic";
+      readSpiralCenter();
+    }
+
+    function readSpiralCenter() {
+      const fallbackX = canvas.width / 2;
+      const fallbackY = canvas.height / 2;
+      const parsedX = parseFloat(spiralCenterXInput.value);
+      const parsedY = parseFloat(spiralCenterYInput.value);
+      spiralCenterX = Number.isFinite(parsedX) ? parsedX : fallbackX;
+      spiralCenterY = Number.isFinite(parsedY) ? parsedY : fallbackY;
+
+      spiralCenterX = Math.max(0, Math.min(canvas.width, spiralCenterX));
+      spiralCenterY = Math.max(0, Math.min(canvas.height, spiralCenterY));
+
+      spiralCenterXInput.value = Math.round(spiralCenterX);
+      spiralCenterYInput.value = Math.round(spiralCenterY);
     }
 
     function syncCropInputsFromImage() {
@@ -621,8 +652,6 @@
       }
 
       #applyFlow(emitter) {
-        const centerX = canvas.width / 2;
-        const centerY = canvas.height / 2;
         const base = baseSpeeds[this.layer] || baseSpeeds[0];
 
         if (flowMode === "leftToRightBurst") {
@@ -642,6 +671,8 @@
         }
 
         if (flowMode === "radial") {
+          const centerX = canvas.width / 2;
+          const centerY = canvas.height / 2;
           const dx = (emitter?.x ?? this.x) - centerX;
           const dy = (emitter?.y ?? this.y) - centerY;
           const angle = Math.atan2(dy, dx) + (Math.random() - 0.5) * 0.2;
@@ -655,7 +686,7 @@
         if (flowMode === "spiral") {
           const orbit = base * 0.8 * speedMultiplier;
           const spiralAngle =
-            Math.atan2((emitter?.y ?? this.y) - centerY, (emitter?.x ?? this.x) - centerX) +
+            Math.atan2((emitter?.y ?? this.y) - spiralCenterY, (emitter?.x ?? this.x) - spiralCenterX) +
             (Math.random() - 0.5) * 0.5;
           this.vx = Math.cos(spiralAngle + Math.PI / 2) * orbit;
           this.vy = Math.sin(spiralAngle + Math.PI / 2) * orbit;
@@ -879,6 +910,15 @@
       });
     });
 
+    [spiralCenterXInput, spiralCenterYInput].forEach(el => {
+      el.addEventListener("input", () => {
+        if (!sourceImage) return;
+        readSpiralCenter();
+        createParticles();
+        setStatus("Spiral center updated.");
+      });
+    });
+
     flowModeSelect.addEventListener("change", () => {
       if (!sourceImage) return;
       readParticleSettings();
@@ -918,6 +958,7 @@
 
     // Initialize canvas size
     applyResolution();
+    readSpiralCenter();
     syncPresetSelection();
     setDetectionStatus("Detection results will show here after loading an image.");
   </script>
