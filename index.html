@@ -647,10 +647,9 @@
       reset() {
         readParticleSettings(); // ensure we use latest settings
 
-        const useConeOrigin = flowMode === "cone";
-
         if (!starMask.length) {
           // Fallback: random red particles across canvas
+          const useConeOrigin = flowMode === "cone";
           this.x = useConeOrigin ? coneOriginX : Math.random() * canvas.width;
           this.y = useConeOrigin ? coneOriginY : Math.random() * canvas.height;
           this.color = "rgba(255,0,0,1)";
@@ -662,8 +661,8 @@
         }
 
         const p = starMask[Math.floor(Math.random() * starMask.length)];
-        this.x = useConeOrigin ? coneOriginX + (Math.random() - 0.5) * 3 : p.x + (Math.random() - 0.5) * 1.5;
-        this.y = useConeOrigin ? coneOriginY + (Math.random() - 0.5) * 3 : p.y + (Math.random() - 0.5) * 1.5;
+        this.x = p.x + (Math.random() - 0.5) * 1.5;
+        this.y = p.y + (Math.random() - 0.5) * 1.5;
         this.color = `rgba(${p.r},${p.g},${p.b},1)`;
         this.life = lifeMin + Math.random() * (lifeMax - lifeMin);
         this.age = Math.random() * this.life * 0.3;
