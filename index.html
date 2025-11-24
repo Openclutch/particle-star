@@ -129,6 +129,16 @@
       </div>
 
       <div class="control-group">
+        <label for="flowModeSelect">Flow pattern</label>
+        <select id="flowModeSelect">
+          <option value="classic">Classic tri-beam</option>
+          <option value="leftToRightBurst">Left-to-right, burst at tip</option>
+          <option value="radial">Radiate from center</option>
+          <option value="spiral">Spiral drift</option>
+        </select>
+      </div>
+
+      <div class="control-group">
         <label for="codecSelect">Codec preference</label>
         <select id="codecSelect">
           <option value="auto">Auto (browser default)</option>
@@ -198,6 +208,7 @@
     const durationInput = document.getElementById("durationInput");
     const fpsInput = document.getElementById("fpsInput");
     const codecSelect = document.getElementById("codecSelect");
+    const flowModeSelect = document.getElementById("flowModeSelect");
     const redThresholdInput = document.getElementById("redThreshold");
 
     // NEW: particle control inputs
@@ -240,6 +251,7 @@
     let speedMultiplier = 1.8;
     let lifeMin = 0.4;
     let lifeMax = 1.2;
+    let flowMode = "classic";
 
     // Recording
     let recorder = null;
@@ -351,6 +363,8 @@
       if (lifeMax <= lifeMin) {
         lifeMax = lifeMin + 0.1;
       }
+
+      flowMode = flowModeSelect.value || "classic";
     }
 
     class Particle {
@@ -368,10 +382,7 @@
           this.color = "rgba(255,0,0,1)";
           this.life = lifeMin + Math.random() * (lifeMax - lifeMin);
           this.age = Math.random() * this.life;
-          const speed = 70 * speedMultiplier;
-          const angle = Math.random() * Math.PI * 2;
-          this.vx = Math.cos(angle) * speed;
-          this.vy = Math.sin(angle) * speed;
+          this.#applyFlow({ x: this.x, y: this.y }, true);
           this.size = (1 + Math.random() * 2) * sizeMultiplier;
           return;
         }
@@ -382,15 +393,7 @@
         this.color = `rgba(${p.r},${p.g},${p.b},1)`;
         this.life = lifeMin + Math.random() * (lifeMax - lifeMin);
         this.age = Math.random() * this.life * 0.3;
-
-        const base = baseSpeeds[this.layer] || baseSpeeds[0];
-        const speed = base * speedMultiplier * (0.4 + Math.random() * 0.8);
-        const angle =
-          (baseAngles[this.layer] || baseAngles[0]) +
-          (Math.random() - 0.5) * angleSpread;
-        this.vx = Math.cos(angle) * speed;
-        this.vy = Math.sin(angle) * speed;
-
+        this.#applyFlow(p);
         const baseSize =
           this.layer === 0 ? 2.2 :
           this.layer === 1 ? 1.8 : 1.4;
@@ -400,6 +403,22 @@
         this.age += dt;
         this.x += this.vx * dt;
         this.y += this.vy * dt;
+
+        if (flowMode === "leftToRightBurst" && this.phase === "line") {
+          const transitionTime = this.life * 0.65;
+          if (this.age >= transitionTime) {
+            const cx = canvas.width * 0.65;
+            const cy = canvas.height * 0.5;
+            const dx = this.x - cx;
+            const dy = this.y - cy;
+            const baseAngle = Math.atan2(dy, dx);
+            const angle = baseAngle + (Math.random() - 0.5) * 0.6;
+            const speed = 140 * speedMultiplier;
+            this.vx = Math.cos(angle) * speed;
+            this.vy = Math.sin(angle) * speed;
+            this.phase = "burst";
+          }
+        }
 
         if (
           this.age > this.life ||
@@ -415,6 +434,51 @@
         ctx.globalAlpha = alpha;
         ctx.fillStyle = this.color;
         ctx.fillRect(this.x, this.y, this.size, this.size);
+      }
+
+      #applyFlow(emitter) {
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const base = baseSpeeds[this.layer] || baseSpeeds[0];
+
+        if (flowMode === "leftToRightBurst") {
+          const primarySpeed = 80 * speedMultiplier;
+          this.vx = primarySpeed * (0.9 + Math.random() * 0.3);
+          this.vy = (Math.random() - 0.5) * 25 * speedMultiplier;
+          this.phase = "line";
+          return;
+        }
+
+        if (flowMode === "radial") {
+          const dx = (emitter?.x ?? this.x) - centerX;
+          const dy = (emitter?.y ?? this.y) - centerY;
+          const angle = Math.atan2(dy, dx) + (Math.random() - 0.5) * 0.2;
+          const speed = 110 * speedMultiplier * (0.6 + Math.random() * 0.7);
+          this.vx = Math.cos(angle) * speed;
+          this.vy = Math.sin(angle) * speed;
+          this.phase = "radial";
+          return;
+        }
+
+        if (flowMode === "spiral") {
+          const orbit = base * 0.8 * speedMultiplier;
+          const spiralAngle =
+            Math.atan2((emitter?.y ?? this.y) - centerY, (emitter?.x ?? this.x) - centerX) +
+            (Math.random() - 0.5) * 0.5;
+          this.vx = Math.cos(spiralAngle + Math.PI / 2) * orbit;
+          this.vy = Math.sin(spiralAngle + Math.PI / 2) * orbit;
+          this.phase = "spiral";
+          return;
+        }
+
+        // Classic tri-beam flow (default)
+        const speed = base * speedMultiplier * (0.4 + Math.random() * 0.8);
+        const angle =
+          (baseAngles[this.layer] || baseAngles[0]) +
+          (Math.random() - 0.5) * angleSpread;
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed;
+        this.phase = "classic";
       }
     }
 
@@ -613,6 +677,13 @@
         createParticles();
         setStatus("Particle parameters updated.");
       });
+    });
+
+    flowModeSelect.addEventListener("change", () => {
+      if (!sourceImage) return;
+      readParticleSettings();
+      createParticles();
+      setStatus("Flow pattern updated.");
     });
 
     previewBtn.addEventListener("click", () => {
