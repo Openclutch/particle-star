@@ -170,7 +170,7 @@
       </div>
 
       <div class="control-group">
-        <label>Spiral center (px)</label>
+        <label>Spiral / radial center (px)</label>
         <div class="inline-inputs">
           <label for="spiralCenterX">X</label>
           <input type="number" id="spiralCenterX" min="0" value="1920" />
@@ -742,8 +742,8 @@
         }
 
         if (flowMode === "radial") {
-          const centerX = canvas.width / 2;
-          const centerY = canvas.height / 2;
+          const centerX = spiralCenterX;
+          const centerY = spiralCenterY;
           const dx = (emitter?.x ?? this.x) - centerX;
           const dy = (emitter?.y ?? this.y) - centerY;
           const angle = Math.atan2(dy, dx) + (Math.random() - 0.5) * 0.2;
@@ -1021,7 +1021,7 @@
         if (!sourceImage) return;
         readSpiralCenter();
         createParticles();
-        setStatus("Spiral center updated.");
+        setStatus("Spiral / radial center updated.");
       });
     });
 
