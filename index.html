@@ -92,6 +92,14 @@
     #status.error {
       color: #ff6b6b;
     }
+    #detectionStatus {
+      font-size: 0.8rem;
+      opacity: 0.8;
+      min-height: 1.2em;
+      margin-top: -8px;
+    }
+    #detectionStatus.error {
+      color: #ff6b6b;
     .inline-inputs {
       display: flex;
       gap: 8px;
@@ -153,6 +161,7 @@
         <select id="flowModeSelect">
           <option value="classic">Classic tri-beam</option>
           <option value="leftToRightBurst">Left-to-right, burst at tip</option>
+          <option value="leftToRightWind">Left-to-right with wind</option>
           <option value="radial">Radiate from center</option>
           <option value="spiral">Spiral drift</option>
         </select>
@@ -188,6 +197,11 @@
       <div class="control-group">
         <label for="speedInput">Speed multiplier</label>
         <input type="range" id="speedInput" min="0.2" max="4" step="0.1" value="1.8" />
+      </div>
+
+      <div class="control-group">
+        <label for="windInput">Wind drift (px/s)</label>
+        <input type="range" id="windInput" min="-150" max="150" step="5" value="20" />
       </div>
 
       <div class="control-group">
@@ -242,6 +256,8 @@
     </div>
   </div>
 
+  <div id="detectionStatus" aria-live="polite"></div>
+
   <div id="canvas-container">
     <canvas id="starCanvas"></canvas>
   </div>
@@ -260,6 +276,7 @@
     const codecSelect = document.getElementById("codecSelect");
     const flowModeSelect = document.getElementById("flowModeSelect");
     const redThresholdInput = document.getElementById("redThreshold");
+    const windInput = document.getElementById("windInput");
 
     // NEW: particle control inputs
     const particlesInput = document.getElementById("particlesInput");
@@ -279,6 +296,7 @@
     const previewBtn = document.getElementById("previewBtn");
     const recordBtn = document.getElementById("recordBtn");
     const statusDiv = document.getElementById("status");
+    const detectionStatusDiv = document.getElementById("detectionStatus");
 
     if (!ctx) {
       console.error("2D context not available.");
@@ -307,6 +325,7 @@
     let particlesPerLayer = 350;
     let sizeMultiplier = 2;
     let speedMultiplier = 1.8;
+    let windDrift = 20;
     let lifeMin = 0.4;
     let lifeMax = 1.2;
     let flowMode = "classic";
@@ -330,6 +349,11 @@
       statusDiv.textContent = msg;
       statusDiv.classList.toggle("error", !!isError);
       console.log("[StarParticles]", msg);
+    }
+
+    function setDetectionStatus(msg, isError = false) {
+      detectionStatusDiv.textContent = msg;
+      detectionStatusDiv.classList.toggle("error", !!isError);
     }
 
     function applyResolution() {
@@ -444,12 +468,12 @@
       }
 
       if (starMask.length === 0) {
-        setStatus(
+        setDetectionStatus(
           "No strong red detected; particles will be generic red over the canvas.",
           true
         );
       } else {
-        setStatus(`Detected ~${starMask.length} red star pixels as emitters.`);
+        setDetectionStatus(`Detected ~${starMask.length} red star pixels as emitters.`);
       }
     }
 
@@ -469,6 +493,8 @@
         0.1,
         Math.min(10, parseFloat(speedInput.value) || 1)
       );
+
+      windDrift = Math.max(-400, Math.min(400, parseFloat(windInput.value) || 0));
 
       lifeMin = Math.max(0.05, parseFloat(lifeMinInput.value) || 0.4);
       lifeMax = Math.max(0.1, parseFloat(lifeMaxInput.value) || 1.2);
@@ -604,6 +630,14 @@
           this.vx = primarySpeed * (0.9 + Math.random() * 0.3);
           this.vy = (Math.random() - 0.5) * 25 * speedMultiplier;
           this.phase = "line";
+          return;
+        }
+
+        if (flowMode === "leftToRightWind") {
+          const primarySpeed = 90 * speedMultiplier;
+          this.vx = primarySpeed * (0.85 + Math.random() * 0.3);
+          this.vy = windDrift * 0.6 + (Math.random() - 0.5) * 12;
+          this.phase = "wind";
           return;
         }
 
@@ -836,7 +870,7 @@
     });
 
     // NEW: react to particle tuning changes
-    [particlesInput, sizeInput, speedInput, lifeMinInput, lifeMaxInput].forEach(el => {
+    [particlesInput, sizeInput, speedInput, windInput, lifeMinInput, lifeMaxInput].forEach(el => {
       el.addEventListener("input", () => {
         if (!sourceImage) return;
         readParticleSettings();
@@ -885,6 +919,7 @@
     // Initialize canvas size
     applyResolution();
     syncPresetSelection();
+    setDetectionStatus("Detection results will show here after loading an image.");
   </script>
 </body>
 </html>
